@@ -189,7 +189,7 @@ def draw_polyline_from_3dpoints(context, points_3d, color, thickness, LINE_TYPE)
     if LINE_TYPE == "GL_LINE_STIPPLE":  
         bgl.glDisable(bgl.GL_LINE_STIPPLE)  
         bgl.glEnable(bgl.GL_BLEND)  # back to uninterupted lines  
-        bgl.glLineWidth(1)
+    bgl.glLineWidth(1)    
     return
 
 def draw_quads_from_3dpoints(context, points_3d, color):
@@ -210,7 +210,8 @@ def draw_quads_from_3dpoints(context, points_3d, color):
     bgl.glBegin(bgl.GL_QUADS)
     for coord in points:  
         bgl.glVertex2f(*coord)
-    bgl.glEnd()  
+    bgl.glEnd()
+
     return
 
 def draw_outline_or_region(mode, points, color):
