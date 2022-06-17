@@ -46,10 +46,7 @@ def bgl_col(rgb, alpha):
     returns a 4 item tuple (r,g,b,a) for use with 
     bgl drawing.
     '''
-    #TODO Test variables for acceptability
-    color = (rgb[0], rgb[1], rgb[2], alpha)
-    
-    return color
+    return rgb[0], rgb[1], rgb[2], alpha
 
 def draw_points(context, points, color, size):
     '''
@@ -214,25 +211,25 @@ def draw_quads_from_3dpoints(context, points_3d, color):
     return
 
 def draw_outline_or_region(mode, points, color):
-        '''  
+    '''  
         arg: 
         mode - either bgl.GL_POLYGON or bgl.GL_LINE_LOOP
         color - will need to be set beforehand using theme colors. eg
         bgl.glColor4f(self.ri, self.gi, self.bi, self.ai)
         '''
         
-        bgl.glColor4f(color[0],color[1],color[2],color[3])
-        if mode == 'GL_LINE_LOOP':
-            bgl.glBegin(bgl.GL_LINE_LOOP)
-        else:
-            bgl.glEnable(bgl.GL_BLEND)
-            bgl.glBegin(bgl.GL_POLYGON)
- 
+    bgl.glColor4f(color[0],color[1],color[2],color[3])
+    if mode == 'GL_LINE_LOOP':
+        bgl.glBegin(bgl.GL_LINE_LOOP)
+    else:
+        bgl.glEnable(bgl.GL_BLEND)
+        bgl.glBegin(bgl.GL_POLYGON)
+
         # start with corner right-bottom
-        for i in range(0,len(points)):
-            bgl.glVertex2f(points[i][0],points[i][1])
- 
-        bgl.glEnd()
+    for i in range(len(points)):
+        bgl.glVertex2f(points[i][0],points[i][1])
+
+    bgl.glEnd()
 
 def round_box(minx, miny, maxx, maxy, rad, corners = [True, True, True, True]):
     '''
@@ -247,39 +244,39 @@ def round_box(minx, miny, maxx, maxy, rad, corners = [True, True, True, True]):
            [0.831, 0.45],
            [0.924, 0.617],
            [0.98, 0.805]]
-    
+
     #cache so we only scale the corners once
     vec = [[0,0]]*len(vec0)
-    for i in range(0,len(vec0)):
+    for i in range(len(vec0)):
         vec[i] = [vec0[i][0]*rad, vec0[i][1]*rad]
-        
+
     verts = [[0,0]]*(9*4)
-    
+
     # start with corner right-bottom
     verts[0] = [maxx-rad,miny]
     for i in range(1,8):
         verts[i]= [maxx - rad + vec[i-1][0], miny + vec[i-1][1]] #done
     verts[8] = [maxx, miny + rad]   #done
-           
+
     #corner right-top    
     verts[9] = [maxx, maxy - rad]
     for i in range(10,17):
         verts[i]= [maxx - vec[i-10][1], maxy - rad + vec[i-10][0]]
     verts[17] = [maxx-rad, maxy]
-    
+
     #corver left top
     verts[18] = [minx + rad, maxy]
     for i in range(19,26):
         verts[i]= [minx + rad - vec[i-19][0], maxy - vec[i-19][1]] #done
     verts[26] = [minx, maxy - rad]
-    
+
     #corner left bottom    
     verts[27] = [minx, miny+rad]
     for i in range(28,35):
         verts[i]= [minx + vec[i-28][1], miny + rad - vec[i-28][0]]    #done
     verts[35]=[minx + rad, miny]
-    
-    
+
+
     return verts
 def draw_bmedge(context, bmedge, mx, thickness, color):
     '''

@@ -39,13 +39,13 @@ from . import common_drawing
 class TextBox(object):
     
     def __init__(self,context,x,y,width,height,border, margin, message):
-        
+
         self.x = x #middle of text box
         self.y = y #top of text box
         self.def_width = width
         self.def_height = height
         self.hang_indent = '-'
-        
+
         self.width = width
         self.height = height
         self.border = border
@@ -95,13 +95,7 @@ class TextBox(object):
             if area.type == 'VIEW_3D':
                 for reg in area.regions:
                     if reg.type == panelType:
-                        if reg.width > 1:
-                            if reg.x == 0:
-                                return 0
-                            else:
-                                return reg.width
-                        else:
-                            return 0
+                        return 0 if reg.width > 1 and reg.x == 0 or reg.width <= 1 else reg.width
                         
     def screen_boudaries(self):
         print('to be done later')
@@ -129,7 +123,7 @@ class TextBox(object):
         '''
         '''
         
-        max_width = max([blf.dimensions(0,line)[0] for line in self.text_lines]) 
+        max_width = max(blf.dimensions(0,line)[0] for line in self.text_lines)
         if max_width < self.width - 2*self.border:
             self.width = max_width + 2*self.border
         
@@ -168,8 +162,8 @@ class TextBox(object):
             while ltr_indx < len(word) and wrd_width < width:
                 wrd_width += blf.dimensions(0,word[ltr_indx])[0]
                 ltr_indx += 1
-                
-            return word[0:ltr_indx - 1]  #TODO, check indexing for slice op
+
+            return word[:ltr_indx - 1]
         
         def wrap_line(txt_line,width):
             '''
@@ -179,7 +173,7 @@ class TextBox(object):
             if blf.dimensions(0,txt_line)[0] < useful_width:
                 #TODO fil
                 return [txt_line]
-            
+
             txt = txt_line  #TODO Clean this
             words = txt.split(' ')
             new_lines = []
@@ -190,33 +184,30 @@ class TextBox(object):
                 word_width = blf.dimensions(0, wrd)[0]
                 if word_width >= useful_width:
                     crp_wrd = crop_word(wrd, useful_width)
-                        
+
                     if len(current_line):
                         new_lines.append(' '.join(current_line))
                     new_lines.append(crp_wrd)
                     current_line = []
                     cur_line_len = 0
                     continue
-                
+
                 if cur_line_len + word_width <= useful_width:
                     current_line.append(wrd)
                     cur_line_len += word_width
-                    if i < len(words)-1:
-                        cur_line_len += spc_size[0]
                 else:
                     new_lines.append(' '.join(current_line))
                     if new_lines[0].startswith(self.hang_indent):
-                        current_line = ['  ' + wrd]
+                        current_line = [f'  {wrd}']
                         cur_line_len = word_width + 2 * spc_width
                     else:
                         current_line = [wrd]
                         cur_line_len = word_width
-                    if i < len(words)-1:
-                        cur_line_len += spc_size[0]
-
+                if i < len(words)-1:
+                    cur_line_len += spc_size[0]
                 if i == len(words) - 1 and len(current_line):
                     new_lines.append(' '.join(current_line))
-                                     
+
             return new_lines          
         
         lines = self.raw_text.split('\n')
@@ -231,21 +222,21 @@ class TextBox(object):
     
     def draw(self):
         regOverlap = bpy.context.user_preferences.system.use_region_overlap
-        
+
         bgcol = bpy.context.user_preferences.themes[0].user_interface.wcol_menu_item.inner
         bgR = bgcol[0]
         bgG = bgcol[1]
         bgB = bgcol[2]
         bgA = .5
         bg_color = (bgR, bgG, bgB, bgA)
-        
+
         txtcol = bpy.context.user_preferences.themes[0].user_interface.wcol_menu_item.text
         txR = txtcol[0]
         txG = txtcol[1]
         txB = txtcol[2]
         txA = .9
         txt_color = (txR, txG, txB, txA)
-        
+
         bordcol = bpy.context.user_preferences.themes[0].user_interface.wcol_menu_item.outline
         hover_color = bpy.context.user_preferences.themes[0].user_interface.wcol_menu_item.inner_sel
         bordR = bordcol[0]
@@ -256,7 +247,7 @@ class TextBox(object):
              border_color = (hover_color[0], hover_color[1], hover_color[2], bordA)
         else:
             border_color = (bordR, bordG, bordB, bordA)
-        
+
         if regOverlap == True:
             tPan = self.discover_panel_width_and_location('TOOL_PROPS')
             nPan = self.discover_panel_width_and_location('UI')
@@ -273,16 +264,16 @@ class TextBox(object):
         right = left + self.width
         bottom = self.y - self.height
         top = self.y
-        
+
         #draw the whole menu bacground
         line_height = blf.dimensions(0, 'A')[1]
         outline = common_drawing.round_box(left, bottom, left +self.width, bottom + self.height, (line_height + 2 * self.spacer)/6)
         common_drawing.draw_outline_or_region('GL_POLYGON', outline, bg_color)
         common_drawing.draw_outline_or_region('GL_LINE_LOOP', outline, border_color)
-        
+
         dpi = bpy.context.user_preferences.system.dpi
         blf.size(0, self.text_size, dpi)
-        
+
         if self.is_collapsed:
             txt_x = left + self.border
             txt_y = top - self.border - line_height
@@ -290,12 +281,12 @@ class TextBox(object):
             bgl.glColor4f(*txt_color)
             blf.draw(0, self.collapsed_msg)
             return
-        
+
         for i, line in enumerate(self.text_lines):
-            
+
             txt_x = left + self.border
             txt_y = top - self.border - (i+1) * (line_height + self.spacer)
-                
+
             blf.position(0,txt_x, txt_y, 0)
             bgl.glColor4f(*txt_color)
             blf.draw(0, line)
@@ -341,23 +332,20 @@ class SketchBrush(object):
         self.sample_points = common_utilities.simple_circle(self.x, self.y, self.pxl_rad, self.n_sampl)
         
     def get_brush_world_size(self,context):
-        region = context.region  
+        region = context.region
         rv3d = context.space_data.region_3d
         center = (self.x,self.y)
         wrld_mx = self.ob.matrix_world
-        
+
         vec, center_ray = common_utilities.ray_cast_region2d(region, rv3d, center, self.ob, self.settings)
         vec.normalize()
         widths = []
         self.world_sample_points = []
-        
+
         if center_ray[2] != -1:
             w = common_utilities.ray_cast_world_size(region, rv3d, center, self.pxl_rad, self.ob, self.settings)
             self.world_width = w if w and w < float('inf') else self.ob.dimensions.length
             #print(w)
-        else:
-            #print('no hit')
-            pass
         
         
     def brush_pix_size_init(self,context,x,y):
@@ -402,10 +390,10 @@ class SketchBrush(object):
             self.new_rad = None
             self.screen_hand_reverse = False
             self.preview_circle = []
-            
+
             self.make_circles()
             self.get_brush_world_size(context)
-            
+
             #put the mouse back
             context.window.cursor_warp(context.region.x + self.x, context.region.y + self.y)
             
@@ -422,17 +410,11 @@ class SketchBrush(object):
     
     def draw(self, context, color=(.7,.1,.8,.8), linewidth=2, color_size=(.8,.8,.8,.8)):
         #TODO color and size
-        
+
         #draw the circle
         if self.mouse_circle != []:
             common_drawing.draw_polyline_from_points(context, self.mouse_circle, color, linewidth, "GL_LINE_SMOOTH")
-        
-        #draw the sample points which are raycast
-        if self.world_sample_points != []:
-            #TODO color and size
-            #common_drawing.draw_3d_points(context, self.world_sample_points, (1,1,1,1), 3)
-            pass
-    
+
         #draw the preview circle if changing brush size
         if self.preview_circle != []:
             common_drawing.draw_polyline_from_points(context, self.preview_circle, color_size, linewidth, "GL_LINE_SMOOTH")

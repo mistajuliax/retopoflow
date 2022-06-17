@@ -19,63 +19,67 @@ Decent Resrouces:
 http://blender.stackexchange.com/questions/4832/how-to-find-the-right-keymap-to-change-on-addon-registration
 '''
 
+
 import bpy
-   
-def_rf_key_map = {}
-#SHARED KEYS
-def_rf_key_map['action'] = {'LEFTMOUSE'}
-def_rf_key_map['select'] = {'LEFTMOUSE'}  #this is only used if there is conflict with user preferences
-def_rf_key_map['select all'] = {'A'}
-def_rf_key_map['cancel'] = {'ESC', 'CTRL+ALT+DEL'}
-def_rf_key_map['confirm'] = {'RET', 'NUMPAD_ENTER'}
-def_rf_key_map['modal confirm'] = {'SPACE', 'RET', 'NUMPAD_ENTER'}
-def_rf_key_map['modal cancel'] = {'RIGHTMOUSE','ESC'}
-def_rf_key_map['modal precise'] = 'SHIFT'
-def_rf_key_map['modal constrain'] = 'ALT'
-def_rf_key_map['scale'] = {'S'}
-def_rf_key_map['translate'] = {'G'}
-def_rf_key_map['rotate'] = {'R'}
-def_rf_key_map['delete'] = {'X', 'DEL'}
-def_rf_key_map['view cursor'] = {'C'}
-def_rf_key_map['undo'] = {'CTRL+Z'}
-def_rf_key_map['help'] = {'SHIFT+SLASH'}
-def_rf_key_map['snap cursor'] = {'SHIFT+S'}
-def_rf_key_map['navigate'] = set() #To be filled in last
-def_rf_key_map['up count'] = {'SHIFT+NUMPAD_PLUS','SHIFT+WHEELUPMOUSE'}     
-def_rf_key_map['dn count'] = {'SHIFT+NUMPAD_MINUS','SHIFT+WHEELDOWNMOUSE'}
 
-#CONTOURS UNIQUE KEYS
-def_rf_key_map['smooth'] = {'CTRL+S'}
-def_rf_key_map['bridge'] = {'B'}
-def_rf_key_map['new'] = {'N'}
-def_rf_key_map['align'] = {'SHIFT+A', 'CRTL+A', 'ALT+A'}
-def_rf_key_map['up shift'] = {'LEFT_ARROW'}
-def_rf_key_map['dn shift'] = {'RIGHT_ARROW'}
-def_rf_key_map['mode'] = {'TAB'}
+def_rf_key_map = {
+    'action': {'LEFTMOUSE'},
+    'select': {'LEFTMOUSE'},
+    'select all': {'A'},
+    'cancel': {'ESC', 'CTRL+ALT+DEL'},
+    'confirm': {'RET', 'NUMPAD_ENTER'},
+    'modal confirm': {'SPACE', 'RET', 'NUMPAD_ENTER'},
+    'modal cancel': {'RIGHTMOUSE', 'ESC'},
+    'modal precise': 'SHIFT',
+    'modal constrain': 'ALT',
+    'scale': {'S'},
+    'translate': {'G'},
+    'rotate': {'R'},
+    'delete': {'X', 'DEL'},
+    'view cursor': {'C'},
+    'undo': {'CTRL+Z'},
+    'help': {'SHIFT+SLASH'},
+    'snap cursor': {'SHIFT+S'},
+    'navigate': set(),
+    'up count': {'SHIFT+NUMPAD_PLUS', 'SHIFT+WHEELUPMOUSE'},
+    'dn count': {'SHIFT+NUMPAD_MINUS', 'SHIFT+WHEELDOWNMOUSE'},
+    'bridge': {'B'},
+    'new': {'N'},
+    'align': {'SHIFT+A', 'CRTL+A', 'ALT+A'},
+    'up shift': {'LEFT_ARROW'},
+    'dn shift': {'RIGHT_ARROW'},
+    'mode': {'TAB'},
+    'brush size': {'F'},
+    'change junction': {'CTRL+C'},
+    'dissolve': {'CTRL+D'},
+    'fill': {'SHIFT+F'},
+    'knife': {'K'},
+    'merge': {'M'},
+    'rip': {'CTRL+R'},
+    'rotate pole': {'R', 'SHIFT+R'},
+    'scale handles': {'CTRL+S'},
+    'smooth': {'C'},
+    'tweak move': {'T'},
+    'tweak relax': {'SHIFT+T'},
+    'update': {'CTRL+U'},
+    'zip': {'Z'},
+    'zip down': {'CTRL+NUMPAD_PLUS'},
+    'zip up': {'CTRL+NUMPAD_MINUS'},
+}
 
-#POLYSTRIPS UNIQUE KEYS
-def_rf_key_map['brush size'] = {'F'}
-def_rf_key_map['change junction'] = {'CTRL+C'}
-def_rf_key_map['dissolve'] = {'CTRL+D'}
-def_rf_key_map['fill'] = {'SHIFT+F'}
-def_rf_key_map['knife'] = {'K'}
-def_rf_key_map['merge'] = {'M'}
-def_rf_key_map['rip'] = {'CTRL+R'}
-def_rf_key_map['rotate pole'] = {'R', 'SHIFT+R'}
-def_rf_key_map['scale handles'] = {'CTRL+S'}
-def_rf_key_map['smooth'] = {'C'}
-def_rf_key_map['tweak move'] = {'T'}
-def_rf_key_map['tweak relax'] = {'SHIFT+T'}
-def_rf_key_map['update'] = {'CTRL+U'}
-def_rf_key_map['zip'] = {'Z'}
-def_rf_key_map['zip down'] = {'CTRL+NUMPAD_PLUS'}
-def_rf_key_map['zip up'] = {'CTRL+NUMPAD_MINUS'}
-
-
-navigation_events = {'Rotate View', 'Move View', 'Zoom View', 
-                     'View Pan', 'View Orbit', 'Rotate View', 
-                     'View Persp/Ortho', 'View Numpad', 'NDOF Orbit View', 
-                     'NDOF Pan View', 'View Selected', 'Center View to Cursor'}
+navigation_events = {
+    'Move View',
+    'Zoom View',
+    'View Pan',
+    'View Orbit',
+    'Rotate View',
+    'View Persp/Ortho',
+    'View Numpad',
+    'NDOF Orbit View',
+    'NDOF Pan View',
+    'View Selected',
+    'Center View to Cursor',
+}
 
 def get_nav_keys(keycon):
     nav_keys = set()
@@ -99,12 +103,10 @@ def get_nav_keys(keycon):
     return nav_keys
 
 def kmi_details(kmi):
-        kmi_ctrl    = 'CTRL+'  if kmi.ctrl  else ''
-        kmi_shift   = 'SHIFT+' if kmi.shift else ''
-        kmi_alt     = 'ALT+'   if kmi.alt   else ''
-        kmi_ftype   = kmi_ctrl + kmi_shift + kmi_alt + kmi.type
-        
-        return kmi_ftype
+    kmi_ctrl    = 'CTRL+'  if kmi.ctrl  else ''
+    kmi_shift   = 'SHIFT+' if kmi.shift else ''
+    kmi_alt     = 'ALT+'   if kmi.alt   else ''
+    return kmi_ctrl + kmi_shift + kmi_alt + kmi.type
     
 
 #if 'Blender User' in bpy.context.window_manager.keyconfigs:
@@ -126,18 +128,15 @@ def find_kmi_by_idname(idname, keymap = None, keycon = None):
             keycon = wm.keyconfigs['Blender User']
         else:
             keycon = wm.keyconfigs.active
-    
+
     kmis = []
-    
-    if keymap:
-        keymaps = [keycon.keymaps[keymap]]
-    else:
-        keymaps = keycon.keymaps
+
+    keymaps = [keycon.keymaps[keymap]] if keymap else keycon.keymaps
     for km in keymaps:
-        for kmi in km.keymap_items:
-            if kmi.idname == idname:
-                kmis.append(kmi_details(kmi))
-                
+        kmis.extend(
+            kmi_details(kmi) for kmi in km.keymap_items if kmi.idname == idname
+        )
+
     return kmis
 
     
@@ -149,18 +148,17 @@ def add_to_dict(km_dict, key,value, safety = True):
                 if key not in km_dict:
                     km_dict[key] = {}
                 return False
-            
+
     if key in km_dict:
         val = km_dict[key]
-        
-        if value not in val:
-            val.add(value)
-            return True
-        else:
+
+        if value in val:
             return False
+        val.add(value)
     else:
-        km_dict[key] = set([value])
-        return True
+        km_dict[key] = {value}
+
+    return True
        
 def rtflow_default_keymap_generate():
     km_dict = def_rf_key_map.copy()
@@ -179,14 +177,13 @@ def rtflow_keymap():
     '''
     this is a dynamic attempt to generate key map.  Buggy, unpredictable and no very useful
     '''
-    km_dict = {}
     C = bpy.context
     wm = C.window_manager
     if 'Blender User' in wm.keyconfigs:
         keycon = wm.keyconfigs['Blender User']
     else:
         keycon = wm.keyconfigs.active
-    
+
     if '3D View' not in keycon.keymaps:
         print(keycon.name)
         print('you have no 3D View config in your keymap, reverting to default Blender')
@@ -195,65 +192,64 @@ def rtflow_keymap():
     #TODO make the defaults for these better
     if 'maya' in keycon.name:
         def_map = def_rf_key_map
-    if '3ds' in keycon.name:
-        def_map = def_rf_key_map
-    else:
-        def_map = def_rf_key_map
-        
+    def_map = def_rf_key_map
     #Attempt to gather user preferred actions from Blender prefs    
     sel = C.user_preferences.inputs.select_mouse
     sel += 'MOUSE'
-    
+
     act = def_rf_key_map['action']
     nav_keys = get_nav_keys(keycon)
-    km_dict['cancel'] = def_rf_key_map['cancel']
-    km_dict['confirm'] = def_rf_key_map['confirm']
-    km_dict['modal confirm'] = def_rf_key_map['modal confirm']
-    km_dict['modal cancel'] = def_rf_key_map['modal cancel']
+    km_dict = {
+        'cancel': def_rf_key_map['cancel'],
+        'confirm': def_rf_key_map['confirm'],
+        'modal confirm': def_rf_key_map['modal confirm'],
+        'modal cancel': def_rf_key_map['modal cancel'],
+    }
+
     ######################################
     #######  Selection and Action ########
 
     if act & nav_keys:
         print('Intersection of action and nav keys')
         print(act & nav_keys)
-        print(str(act) + ' detected in navigations keys')
+        print(f'{str(act)} detected in navigations keys')
         print('Please modify key_maps.py in addon directory')
-        
+
         print('default keymap also conflicts with user navigation keys')
         bpy.ops.wm.url_open(url = "http://cgcookiemarkets.com/blender/forums/topic/custom-modal-hotkeys/")
     else:
-        print('uneventfully added action keymap :' + str(act))
+        print(f'uneventfully added action keymap :{str(act)}')
         for val in act:
             add_to_dict(km_dict,'action', val, safety = False)
             add_to_dict(km_dict,'modal confirm', val, safety = False)
-            
+
     if sel in nav_keys:
-        print(sel + ' for selection detected in navigations keys')
+        print(f'{sel} for selection detected in navigations keys')
         #try default map
         if not def_map['select'] & nav_keys:
             sel = def_map['select']
             print('Default overrides does not conflict')
             for val in sel:
                 add_to_dict(km_dict,'select', val, safety = False)
-            
+
         else:
             print('Default select keymap also conflicts with user navigation keys')
             bpy.ops.wm.url_open(url = "http://cgcookiemarkets.com/blender/forums/topic/custom-modal-hotkeys/")
             km_dict = rtflow_def_default_keymap_generate()
             return(km_dict)
     else:
-        print('uneventfully added select keymap :' + str(sel))
+        print(f'uneventfully added select keymap :{str(sel)}')
         add_to_dict(km_dict,'select', sel, safety = False)
         add_to_dict(km_dict, 'modal cancel', sel, safety = True) #safety so that if select and action are same
 
     ######################################
     ######  Grab, Rotate and Scale  ######
-    
+
     #direct keymaps to operators
     trans = set(find_kmi_by_idname('transform.translate', keymap = '3D View'))
     rot = set(find_kmi_by_idname('transform.rotate', keymap = '3D View'))
     scale = set(find_kmi_by_idname('transform.resize', keymap = '3D View'))
-    
+
     #Transform Modal Map.  Maya has no operator keymap, just
     if 'Transform Modal Map' in keycon.keymaps:
         for kmi in keycon.keymaps['Transform Modal Map'].keymap_items:
@@ -263,43 +259,44 @@ def rtflow_keymap():
                 rot = set(kmi_details(kmi))
             if kmi.propvalue == 'TRANSLATE' and not trans:
                 trans = set(kmi_details(kmi))
-    
+
     if not trans:
         print('Translate not found in operator keymap or Transform Modal Map')
         km_dict['translate'] = def_map['translate']    
     else:
         km_dict['translate'] = trans
-            
+
     if not rot:
         print('default rotate used...no rotate found: ' + str(def_map['translate']))
         km_dict['rotate'] = def_map['rotate']
     else:
         km_dict['rotate'] = rot 
-    
-    
+
+
     if not scale:
         print('Scale not found in operator keymap or Transform Modal Map')
         km_dict['scale'] = def_map['scale']
     else:
         km_dict['scale'] = scale
-        
+
     ##################################
-    ######  Regular Operators  ####### 
+    ######  Regular Operators  #######
     for key in ['up count', 'dn count', 'bridge','new','align','up shift','dn shift','smooth', 'snap cursor','view cursor','undo','mode', 'delete']:
         for val in def_map[key]:
             if not add_to_dict(km_dict, key, val, safety = True):
-                print('left out %s key for %s operator' % (val, key))
+                print(f'left out {val} key for {key} operator')
                 print('check your defaults')
 
     #navigation keys last, to avoid conflicts eg, Ctl + Wheel
     #center view on cursor is included in nav
     for kmi in keycon.keymaps['3D View'].keymap_items:
-        if kmi.name in navigation_events:   
-            if not add_to_dict(km_dict,'navigate', kmi_details(kmi)):
-                print('Left out %s navigation, collision with other key' % kmi.name)
-                
+        if kmi.name in navigation_events and not add_to_dict(
+            km_dict, 'navigate', kmi_details(kmi)
+        ):
+            print(f'Left out {kmi.name} navigation, collision with other key')
+
     #bug, WHEELOUTMOUSE and WHEELINMOUSE used in 3dview keymaap
     add_to_dict(km_dict,'navigate', 'WHEELDOWNMOUSE')
     add_to_dict(km_dict,'navigate', 'WHEELUPMOUSE')
-    
+
     return km_dict

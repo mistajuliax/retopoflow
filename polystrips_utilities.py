@@ -44,23 +44,23 @@ def blender_bezier_to_even_points(b_ob, dist):
     
     mx = b_ob.matrix_world
     paths = []
+    pregv = None
     for spline in b_ob.data.splines:
         total_verts = []
-        pregv = None
         for bp0,bp1 in zip(spline.bezier_points[:-1],spline.bezier_points[1:]):
-            p0 = pregv if pregv else mx * bp0.co
+            p0 = pregv or mx * bp0.co
             p1 = mx * bp0.handle_right
             p2 = mx * bp1.handle_left
             p3 = mx * bp1.co
-            
+
             points = cubic_bezier_points_dist(p0, p1, p2, p3, dist, first=True)
             total_verts.extend(points)
-            
+
             L = common_utilities.get_path_length(total_verts)
             n = round(L/dist)
             new_verts = common_utilities.space_evenly_on_path(total_verts, [(0,1),(1,2)], n, 0)
         paths.append(new_verts)
-        
+
     return(paths)
              
 def quadratic_bezier_weights(t):
@@ -135,7 +135,7 @@ def cubic_bezier_find_closest_t_approx(p0, p1, p2, p3, p, max_depth=8, steps=10)
     '''
     
     t0,t1 = 0,1
-    for depth in range(max_depth):
+    for _ in range(max_depth):
         ta = t0
         td = (t1-t0)/steps
         l_t = [ta+td*i for i in range(steps+1)]
@@ -155,9 +155,7 @@ def cubic_bezier_find_closest_t_approx_distance(p0,p1,p2,p3, dist, threshold=0.1
         l0123 = (p0-p1).length + (p1-p2).length + (p2-p3).length
         if l03/l0123 > (1-threshold):
             # close enough to approx as line
-            if l03 < d:
-                return (l03, t1-t0)
-            return (d, (t1-t0)*(d/l03))
+            return (l03, t1-t0) if l03 < d else (d, (t1-t0)*(d/l03))
         t05 = (t0+t1)/2
         subd = cubic_bezier_decasteljau_subdivide(p0,p1,p2,p3)
         dret0,tret0 = find_t(subd[0][0], subd[0][1], subd[0][2], subd[0][3], d, t0, t05, threshold)
@@ -172,10 +170,9 @@ def cubic_bezier_t_of_s(p0,p1,p2,p3, steps = 100):
     approximated at steps along the curve.  Dumber method than
     the decastelejue subdivision.
     '''
-    s_t_map = {}
-    s_t_map[0] = 0
+    s_t_map = {0: 0}
     vi0 = p0
-    cumul_length = 0      
+    cumul_length = 0
     for i in range(1,steps+1):
         t = i/steps
         weights = cubic_bezier_weights(i/steps)
@@ -183,7 +180,7 @@ def cubic_bezier_t_of_s(p0,p1,p2,p3, steps = 100):
         cumul_length += (vi1 - vi0).length
         s_t_map[cumul_length] = t
         vi0 = vi1
-        
+
     return s_t_map
 
 def cubic_bezier_t_of_s_dynamic(p0,p1,p2,p3, initial_step = 50):
@@ -192,40 +189,38 @@ def cubic_bezier_t_of_s_dynamic(p0,p1,p2,p3, initial_step = 50):
     approximated at steps along the curve.  Dumber method than
     the decastelejue subdivision.
     '''
-    s_t_map = {}
-    s_t_map[0] = 0
-    
+    s_t_map = {0: 0}
     pi0 = p0
     cumul_length = 0
-    
+
     iters = 0
-    dt = 1/initial_step      
+    dt = 1/initial_step
     t = dt
     while t < 1  and iters < 1000:
         iters += 1
-        
+
         weights = cubic_bezier_weights(t)
         pi1 = cubic_bezier_blend_weights(p0, p1, p2, p3, weights)    
         cumul_length += (pi1 - pi0).length
-        
-        
+
+
         v_num = (pi1 - pi0).length/dt
         v_cls = cubic_bezier_derivative(p0, p1, p2, p3, t).length
         s_t_map[cumul_length] = t
-             
+
         pi0 = pi1
         dt *= v_cls/v_num
         t += dt
-        
+
         if iters == 1000:
             print('maxed iters')
-    
+
     #take care of the last point
     weights = cubic_bezier_weights(1)
-    pi1 = cubic_bezier_blend_weights(p0, p1, p2, p3, weights)    
+    pi1 = cubic_bezier_blend_weights(p0, p1, p2, p3, weights)
     cumul_length += (pi1 - pi0).length
     s_t_map[cumul_length] = 1 
-            
+
     dprint('initial dt %f, final dt %f' % (1/initial_step, dt), l=4)
     return s_t_map
 
@@ -245,7 +240,7 @@ def closest_t_of_s(s_t_map, s):
             return t
         else:
             d0 = d
-        
+
     return t
          
         
@@ -328,20 +323,24 @@ def cubic_bezier_fit_points(l_co, error_scale, depth=0, t0=0, t3=1, allow_split=
         print('cubic_bezier_fit_points: returning []')
         return [] #[(t0,t3,l_co[0],l_co[0],l_co[0],l_co[0])]
     l_t  = [ad/dist for ad in l_ad]
-    
+
     ex,x0,x1,x2,x3 = cubic_bezier_fit_value([co[0] for co in l_co], l_t)
     ey,y0,y1,y2,y3 = cubic_bezier_fit_value([co[1] for co in l_co], l_t)
     ez,z0,z1,z2,z3 = cubic_bezier_fit_value([co[2] for co in l_co], l_t)
     tot_error = ex+ey+ez
     dprint('total error = %f (%f)' % (tot_error,error_scale), l=4)
-    
-    if not force_split:
-        if tot_error < error_scale or depth == 4 or len(l_co)<=15 or not allow_split:
-            p0,p1,p2,p3 = Vector((x0,y0,z0)),Vector((x1,y1,z1)),Vector((x2,y2,z2)),Vector((x3,y3,z3))
-            return [(t0,t3,p0,p1,p2,p3)]
-    
+
+    if not force_split and (
+        tot_error < error_scale
+        or depth == 4
+        or len(l_co) <= 15
+        or not allow_split
+    ):
+        p0,p1,p2,p3 = Vector((x0,y0,z0)),Vector((x1,y1,z1)),Vector((x2,y2,z2)),Vector((x3,y3,z3))
+        return [(t0,t3,p0,p1,p2,p3)]
+
     # too much error in fit.  split sequence in two, and fit each sub-sequence
-    
+
     # find a good split point
     ind_split = -1
     mindot = 1.0
@@ -350,7 +349,7 @@ def cubic_bezier_fit_points(l_co, error_scale, depth=0, t0=0, t3=1, allow_split=
         if l_t[ind] > 0.6: break
         #if l_ad[ind] < 0.1: continue
         #if l_ad[ind] > dist-0.1: break
-        
+
         v0 = l_co[ind-4]
         v1 = l_co[ind+0]
         v2 = l_co[ind+4]
@@ -360,12 +359,12 @@ def cubic_bezier_fit_points(l_co, error_scale, depth=0, t0=0, t3=1, allow_split=
         if ind_split==-1 or dot01 < mindot:
             ind_split = ind
             mindot = dot01
-    
+
     if ind_split == -1:
         # did not find a good splitting point!
         p0,p1,p2,p3 = Vector((x0,y0,z0)),Vector((x1,y1,z1)),Vector((x2,y2,z2)),Vector((x3,y3,z3))
         return [(t0,t3,p0,p1,p2,p3)]
-    
+
     l_co_left  = l_co[:ind_split]
     l_co_right = l_co[ind_split:]
     tsplit = ind_split / (len(l_co)-1)

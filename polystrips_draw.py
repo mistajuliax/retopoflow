@@ -63,10 +63,7 @@ def draw_gedge_info(gedge,context):
     helper draw module to display info about the Gedge
     '''
     l = len(gedge.cache_igverts)
-    if l > 4:
-        n_quads = math.floor(l/2) + 1
-    else:
-        n_quads = 3
+    n_quads = math.floor(l/2) + 1 if l > 4 else 3
     draw_gedge_text(gedge, context, str(n_quads))
 
 def cubic_bezier_surface_t(v00,v01,v02,v03, v10,v11,v12,v13, v20,v21,v22,v23, v30,v31,v32,v33, t02,t13):

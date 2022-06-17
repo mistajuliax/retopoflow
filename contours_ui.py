@@ -123,17 +123,13 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
     def poll(cls,context):
         if context.mode not in {'EDIT_MESH','OBJECT'}:
             return False
-        
-        if context.active_object:
-            if context.mode == 'EDIT_MESH':
-                if len(context.selected_objects) > 1:
-                    return True
-                else:
-                    return False
-            else:
-                return context.object.type == 'MESH'
-        else:
+
+        if not context.active_object:
             return False
+        if context.mode == 'EDIT_MESH':
+            return len(context.selected_objects) > 1
+        else:
+            return context.object.type == 'MESH'
     
     ####Blender Mesh Data Management####
     
@@ -186,36 +182,32 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         self.existing_cut = None
         ob = context.object
         tmp_ob = None
-        
-        name = ob.name + '_recontour'
+
+        name = f'{ob.name}_recontour'
         self.dest_ob, self.dest_me, self.dest_bme = self.new_destination_obj(context, name, ob.matrix_world)
-        
-        
+
+
         is_valid = is_object_valid(context.object)
         has_tmp = 'ContourTMP' in bpy.data.objects and bpy.data.objects['ContourTMP'].data
-        
-        
+
+
         if is_valid and has_tmp:
             self.bme = contour_mesh_cache['bme']            
             tmp_ob = contour_mesh_cache['tmp']
-            
+
         else:
             clear_mesh_cache()
-            
+
             me = ob.to_mesh(scene=context.scene, apply_modifiers=True, settings='PREVIEW')
             me.update()
-            
+
             self.bme = bmesh.new()
             self.bme.from_mesh(me)
             ngons = [f for f in self.bme.faces if len(f.verts) > 4]
             if len(ngons) or len(ob.modifiers) > 0:
                 tmp_ob= self.tmp_obj_and_triangulate(context, self.bme, ngons, ob.matrix_world)
-                
-        if tmp_ob:
-            self.original_form = tmp_ob
-        else:
-            self.original_form = ob
-        
+
+        self.original_form = tmp_ob or ob
         self.tmp_ob = tmp_ob
     
     def mesh_data_gather_edit_mode(self,context):
@@ -223,36 +215,31 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         get references to object and object data
         '''
         
-        self.dest_ob = context.object        
+        self.dest_ob = context.object
         self.dest_me = self.dest_ob.data
         self.dest_bme = bmesh.from_edit_mesh(self.dest_me)
-        
+
         ob = [obj for obj in context.selected_objects if obj.name != context.object.name][0]
-        is_valid = is_object_valid(ob)
-        if is_valid:
-            self.bme = contour_mesh_cache['bme']            
+        if is_valid := is_object_valid(ob):
+            self.bme = contour_mesh_cache['bme']
             tmp_ob = contour_mesh_cache['tmp']
         else:
             clear_mesh_cache()
             me = ob.to_mesh(scene=context.scene, apply_modifiers=True, settings='PREVIEW')
             me.update()
-            
+
             self.bme = bmesh.new()
             self.bme.from_mesh(me)
             ngons = [f for f in self.bme.faces if len(f.verts) > 4]
             if len(ngons) or len(ob.modifiers) > 0:
                 tmp_ob = self.tmp_obj_and_triangulate(context, self.bme, ngons, ob.matrix_world)
-        
-        if tmp_ob:
-            self.original_form = tmp_ob
-        else:
-            self.original_form = ob
-        
+
+        self.original_form = tmp_ob or ob
         self.tmp_ob = tmp_ob
-        
+
         #count and collect the selected edges if any
         ed_inds = [ed.index for ed in self.dest_bme.edges if ed.select]
-        
+
         self.existing_loops = []
         if len(ed_inds):
             vert_loops = contour_utilities.edge_loops_from_bmedges(self.dest_bme, ed_inds)
@@ -260,38 +247,38 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
             if len(vert_loops) > 1:
                 self.report({'WARNING'}, 'Only one edge loop will be used for extension')
             print('there are %i edge loops selected' % len(vert_loops))
-            
+
             #for loop in vert_loops:
             #until multi loops are supported, do this    
             loop = vert_loops[0]
             if loop[-1] != loop[0] and len(list(set(loop))) != len(loop):
                 self.report({'WARNING'},'Edge loop selection has extra parts!  Excluding this loop')
-                
+
             else:
                 lverts = [self.dest_bme.verts[i] for i in loop]
-                
+
                 existing_loop =ExistingVertList(context,
                                                 lverts, 
                                                 loop, 
                                                 self.dest_ob.matrix_world,
                                                 key_type = 'INDS')
-                
+
                 #make a blank path with just an existing head
                 path = ContourCutSeries(context, [],
                                 cull_factor = self.settings.cull_factor, 
                                 smooth_factor = self.settings.smooth_factor,
                                 feature_factor = self.settings.feature_factor)
-            
-                
+
+
                 path.existing_head = existing_loop
                 path.seg_lock = False
                 path.ring_lock = True
                 path.ring_segments = len(existing_loop.verts_simple)
                 path.connect_cuts_to_make_mesh(ob)
                 path.update_visibility(context, ob)
-            
+
                 #path.update_visibility(context, self.original_form)
-                
+
                 self.cut_paths.append(path)
                 self.existing_loops.append(existing_loop)
                     
@@ -341,25 +328,23 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         event_shift   = 'SHIFT+' if event.shift else ''
         event_alt     = 'ALT+'   if event.alt   else ''
         event_ftype   = event_ctrl + event_shift + event_alt + event.type
-        
-        
+
+
         return {
-            'context':  context,
-            'region':   context.region,
-            'r3d':      context.space_data.region_3d,
-            
-            'ctrl':     event.ctrl,
-            'shift':    event.shift,
-            'alt':      event.alt,
-            'value':    event.value,
-            'type':     event.type,
-            'ftype':    event_ftype,
-            'press':    event_ftype if event.value=='PRESS'   else None,
-            'release':  event_ftype if event.value=='RELEASE' else None,
-            
-            'mouse':    (float(event.mouse_region_x), float(event.mouse_region_y)),
-            'pressure': 1 if not hasattr(event, 'pressure') else event.pressure
-            }
+            'context': context,
+            'region': context.region,
+            'r3d': context.space_data.region_3d,
+            'ctrl': event.ctrl,
+            'shift': event.shift,
+            'alt': event.alt,
+            'value': event.value,
+            'type': event.type,
+            'ftype': event_ftype,
+            'press': event_ftype if event.value == 'PRESS' else None,
+            'release': event_ftype if event.value == 'RELEASE' else None,
+            'mouse': (float(event.mouse_region_x), float(event.mouse_region_y)),
+            'pressure': event.pressure if hasattr(event, 'pressure') else 1,
+        }
     
     
     def temporary_message_start(self,context, message):
@@ -395,18 +380,17 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         '''
         
         repeated_actions = {'LOOP_SHIFT', 'PATH_SHIFT', 'PATH_SEGMENTS', 'LOOP_SEGMENTS'}
-        
-        if action in repeated_actions:
-            if action == contour_undo_cache[-1][2]:
-                print('repeatable...dont take snapshot')
-                return
-        
-        print('undo: ' + action)    
+
+        if action in repeated_actions and action == contour_undo_cache[-1][2]:
+            print('repeatable...dont take snapshot')
+            return
+
+        print(f'undo: {action}')
         cut_data = copy.deepcopy(self.cut_paths)
         #perhaps I don't even need to copy this?
         state = copy.deepcopy(ContourStatePreserver(self))
         contour_undo_cache.append((cut_data, state, action))
-            
+
         if len(contour_undo_cache) > self.settings.undo_depth:
             contour_undo_cache.pop(0)
             
@@ -474,19 +458,16 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         if len(self.sketch) < 10:
             print('too short!')
             return
-        
+
         for path in self.cut_paths:
             path.deselect(self.settings)
-        
-        print('attempt a new path')                    
+
+        print('attempt a new path')
         self.sel_path  = self.new_path_from_draw(context, self.settings)
         if self.sel_path:
             print('a new path was made')
             self.sel_path.do_select(self.settings)
-            if self.sel_path.cuts:
-                self.sel_cut = self.sel_path.cuts[-1]
-            else:
-                self.sel_cut = None
+            self.sel_cut = self.sel_path.cuts[-1] if self.sel_path.cuts else None
             if self.sel_cut:
                 self.sel_cut.do_select(self.settings)
         self.force_new = False
@@ -520,25 +501,25 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         
         self.sel_loop.tail.x = x
         self.sel_loop.tail.y = y
-        
+
         width = Vector((self.sel_loop.head.x, self.sel_loop.head.y)) - Vector((x,y))
-        
+
         #prevent small errant strokes
         if width.length < 20: #TODO: Setting for minimum pixel width
             self.cut_lines.remove(self.sel_loop)
             self.sel_loop = None
             print('Placed cut is too short')
             return
-        
+
         #hit the mesh for the first time
         hit = self.sel_loop.hit_object(context, self.original_form, method = 'VIEW')
-        
+
         if not hit:
             self.cut_lines.remove(self.sel_loop)
             self.sel_loop = None
             print('Placed cut did not hit the mesh')
             return
-        
+
         self.sel_loop.cut_object(context, self.original_form, self.bme)
         self.sel_loop.simplify_cross(self.segments)
         self.sel_loop.update_com()
@@ -546,18 +527,18 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         self.sel_loop.head = None
         self.sel_loop.tail = None
         self.sel_loop.geom_color = (settings.actv_rgb[0],settings.actv_rgb[1],settings.actv_rgb[2],1)
-        
+
         if not len(self.sel_loop.verts) or not len(self.sel_loop.verts_simple):
             self.sel_loop = None
             print('cut failure')  #TODO, header text message.
             return
-    
-        
+
+
         if settings.debug > 1:
             print('release_place_cut')
             print('len(self.cut_paths) = %d' % len(self.cut_paths))
-            print('self.force_new = ' + str(self.force_new))
-        
+            print(f'self.force_new = {str(self.force_new)}')
+
         if self.cut_paths != [] and not self.force_new:
             for path in self.cut_paths:
                 if path.insert_new_cut(context, self.original_form, self.bme, self.sel_loop, search = settings.search_factor):
@@ -574,30 +555,30 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
                             other_path.deselect(settings)
                     # no need to search for more paths
                     return
-        
+
         #create a blank segment
         path = ContourCutSeries(context, [],
                         cull_factor = settings.cull_factor, 
                         smooth_factor = settings.smooth_factor,
                         feature_factor = settings.feature_factor)
-        
+
         path.insert_new_cut(context, self.original_form, self.bme, self.sel_loop, search = settings.search_factor)
         path.seg_lock = False  #not locked yet...not until a 2nd cut is added in loop mode
         path.segments = 1
         path.ring_segments = len(self.sel_loop.verts_simple)
         path.connect_cuts_to_make_mesh(self.original_form)
         path.update_visibility(context, self.original_form)
-        
+
         for other_path in self.cut_paths:
             other_path.deselect(settings)
-        
+
         self.cut_paths.append(path)
         self.sel_path = path
         path.do_select(settings)
-        
+
         self.cut_lines.remove(self.sel_loop)
         self.force_new = False
-        
+
         return
 
     
@@ -617,21 +598,20 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
             for path in self.cut_paths:
                 if not path.select:
                     path.unhighlight(settings)
-                for c_cut in path.cuts:                    
-                    h_target = c_cut.active_element(context,x,y)
-                    if h_target:
+                for c_cut in path.cuts:        
+                    if h_target := c_cut.active_element(context, x, y):
                         path.highlight(settings)
                         target_at_all = True
                         self.hover_target = path
                         breakout = True
                         break
-                
+
                 if breakout:
                     break
-                                  
+
             if not target_at_all:
                 self.hover_target = None
-        
+
         #assess snap points
         if self.cut_paths != [] and not self.force_new:
             rv3d = context.space_data.region_3d
@@ -644,20 +624,20 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
                     end_cuts.append(path.cuts[0])
                 if not path.existing_tail and len(path.cuts):
                     end_cuts.append(path.cuts[-1])
-                    
+
                 if path.existing_head and not len(path.cuts):
                     end_cuts.append(path.existing_head)
-                    
+
                 for n, end_cut in enumerate(end_cuts):
                     
                     #potential verts to snap to
                     snaps = [v for i, v in enumerate(end_cut.verts_simple) if end_cut.verts_simple_visible[i]]
                     #the screen versions os those
                     screen_snaps = [location_3d_to_region_2d(context.region,rv3d,snap) for snap in snaps]
-                    
+
                     mouse = Vector((x,y))
                     dists = [(mouse - snap).length for snap in screen_snaps]
-                    
+
                     if len(dists):
                         best = min(dists)
                         if best < 2 * settings.extend_radius and best > 4: #TODO unify selection mouse pixel radius.
@@ -675,29 +655,27 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
                                 left = angle + math.pi
                                 right =  angle
                                 self.snap = [path, end_cut]
-                                
+
                                 if end_cut.desc == 'CUT_LINE' and len(path.cuts) > 1:
-    
+
                                     self.snap_circle = contour_utilities.pi_slice(best_vert[0],best_vert[1],settings.extend_radius,.1 * settings.extend_radius, left,right, 20,t_fan = True)
-                                    self.snap_circle.append(self.snap_circle[0])
                                 else:
                                     self.snap_circle = contour_utilities.simple_circle(best_vert[0], best_vert[1], settings.extend_radius, 20)
-                                    self.snap_circle.append(self.snap_circle[0])
-                                    
+                                self.snap_circle.append(self.snap_circle[0])
                                 breakout = True
                                 if best < settings.extend_radius:
                                     snapped = True
                                     self.snap_color = (1,0,0,1)
-                                    
+
                                 else:
                                     alpha = 1 - best/(2*settings.extend_radius)
                                     self.snap_color = (1,0,0,alpha)
-                                    
+
                                 break
-                        
+
                     if breakout:
                         break
-                    
+
             if not breakout:
                 self.snap = []
                 self.snap_circle = []
@@ -707,68 +685,67 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         Handles mouse selection and hovering
         '''
         #identify hover target for highlighting
-        if self.cut_paths != []:
-            new_target = False
-            target_at_all = False
-            
-            for path in self.cut_paths:
-                for c_cut in path.cuts:
-                    if not c_cut.select:
-                        c_cut.unhighlight(settings) 
-                    
-                    h_target = c_cut.active_element(context,x,y)
-                    if h_target:
-                        c_cut.highlight(settings)
-                        target_at_all = True
-                         
-                        if (h_target != self.hover_target) or (h_target.select and not self.cut_line_widget):
-                            
-                            self.hover_target = h_target
-                            if self.hover_target.desc == 'CUT_LINE':
+        if self.cut_paths == []:
+            return
+        new_target = False
+        target_at_all = False
 
-                                if self.hover_target.select:
-                                    for possible_parent in self.cut_paths:
-                                        if self.hover_target in possible_parent.cuts:
-                                            parent_path = possible_parent
-                                            break
-                                    
-                                    #spawn a new widget        
-                                    self.cut_line_widget = CutLineManipulatorWidget(context, 
-                                                                                    settings,
-                                                                                    self.original_form, self.bme,
-                                                                                    self.hover_target,
-                                                                                    parent_path,
-                                                                                    x,
-                                                                                    y)
-                                    self.cut_line_widget.derive_screen(context)
-                                
-                                else:
-                                    self.cut_line_widget = None
-                            
-                        else:
-                            if self.cut_line_widget:
-                                self.cut_line_widget.x = x
-                                self.cut_line_widget.y = y
+        for path in self.cut_paths:
+            for c_cut in path.cuts:
+                if not c_cut.select:
+                    c_cut.unhighlight(settings) 
+
+                if h_target := c_cut.active_element(context, x, y):
+                    c_cut.highlight(settings)
+                    target_at_all = True
+
+                    if (h_target != self.hover_target) or (h_target.select and not self.cut_line_widget):
+
+                        self.hover_target = h_target
+                        if self.hover_target.desc == 'CUT_LINE':
+
+                            if self.hover_target.select:
+                                for possible_parent in self.cut_paths:
+                                    if self.hover_target in possible_parent.cuts:
+                                        parent_path = possible_parent
+                                        break
+
+                                #spawn a new widget        
+                                self.cut_line_widget = CutLineManipulatorWidget(context, 
+                                                                                settings,
+                                                                                self.original_form, self.bme,
+                                                                                self.hover_target,
+                                                                                parent_path,
+                                                                                x,
+                                                                                y)
                                 self.cut_line_widget.derive_screen(context)
-                    #elif not c_cut.select:
-                        #c_cut.geom_color = (settings.geom_rgb[0],settings.geom_rgb[1],settings.geom_rgb[2],1)          
-            if not target_at_all:
-                self.hover_target = None
-                self.cut_line_widget = None
+
+                            else:
+                                self.cut_line_widget = None
+
+                    elif self.cut_line_widget:
+                        self.cut_line_widget.x = x
+                        self.cut_line_widget.y = y
+                        self.cut_line_widget.derive_screen(context)
+                            #elif not c_cut.select:
+                                #c_cut.geom_color = (settings.geom_rgb[0],settings.geom_rgb[1],settings.geom_rgb[2],1)          
+        if not target_at_all:
+            self.hover_target = None
+            self.cut_line_widget = None
     
     
 ####Non Interactive/Non Data Operators###
     def mode_set_guide(self,context):
-        
+
         self.mode = 'main guide'
         self.sel_loop = None  #because loop may not exist after path level operations like changing n_rings
         if self.sel_path:
             self.sel_path.highlight(self.settings)
-                    
+
         if self._timer:
             context.window_manager.event_timer_remove(self._timer)
             self._timer = None
-            
+
         context.area.header_text_set(text = self.guide_msg)    
     
     def mode_set_loop(self):
@@ -828,37 +805,35 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
                    
     def cursor_to_segment(self, context):
         half = math.floor(len(self.sel_path.cuts)/2)
-                            
+
         if math.fmod(len(self.sel_path.cuts), 2):  #5 segments is 6 rings
             loc = 0.5 * (self.sel_path.cuts[half].plane_com + self.sel_path.cuts[half+1].plane_com)
         else:
             loc = self.sel_path.cuts[half].plane_com
-                            
+
         context.scene.cursor_location = loc
     
     #### Loop/Cut  Operators####
     def loop_select(self,context,eventd):
         
-        if self.hover_target and self.hover_target != self.sel_loop:
-                        
-            self.sel_loop = self.hover_target    
-            if not eventd['shift']:
-                for path in self.cut_paths:
-                    for cut in path.cuts:
-                        cut.deselect(self.settings)  
-                    if self.sel_loop in path.cuts and path != self.sel_path:
-                            path.do_select(self.settings)
-                            path.unhighlight(self.settings) #TODO, don't highlight in loop mode
-                            self.sel_path = path
-                    else:
-                        path.deselect(self.settings)
-                          
-            #select the ring
-            self.hover_target.do_select(self.settings)
-            
-            return True
-        else:
+        if not self.hover_target or self.hover_target == self.sel_loop:
             return False
+        self.sel_loop = self.hover_target
+        if not eventd['shift']:
+            for path in self.cut_paths:
+                for cut in path.cuts:
+                    cut.deselect(self.settings)  
+                if self.sel_loop in path.cuts and path != self.sel_path:
+                        path.do_select(self.settings)
+                        path.unhighlight(self.settings) #TODO, don't highlight in loop mode
+                        self.sel_path = path
+                else:
+                    path.deselect(self.settings)
+
+        #select the ring
+        self.hover_target.do_select(self.settings)
+
+        return True
                                         
     def loop_shift(self,context,eventd, shift = 0.05, up = True, undo = True):    
         if undo:
@@ -875,49 +850,47 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
 
                
     def loop_nverts_change(self, context, eventd, n):
-        if n < 3:
-            n = 3
-            
+        n = max(n, 3)
         self.create_undo_snapshot('RING_SEGMENTS')  
-        
+
         for path in self.cut_paths:
             if self.sel_loop in path.cuts:
                 if not path.ring_lock:
                     old_segments = path.ring_segments
                     path.ring_segments = n
-                        
+
                     for cut in path.cuts:
                         new_bulk_shift = round(cut.shift * old_segments/path.ring_segments)
                         new_fine_shift = old_segments/path.ring_segments * cut.shift - new_bulk_shift
-                        
-                        
+
+
                         new_shift =  path.ring_segments/old_segments * cut.shift
-                        
+
                         print(new_shift - new_bulk_shift - new_fine_shift)
                         cut.shift = new_shift
                         cut.simplify_cross(path.ring_segments)
-                    
+
                     path.backbone_from_cuts(context, self.original_form, self.bme)    
                     path.connect_cuts_to_make_mesh(self.original_form)
                     path.update_visibility(context, self.original_form)
-                    
+
                     self.temporary_message_start(context, 'RING SEGMENTS %i' %path.ring_segments)
                     self.msg_start_time = time.time()
                 else:
                     self.temporary_message_start(context, 'RING SEGMENTS: Can not be changed.  Path Locked')
         
     def loop_align(self,context, eventd, undo = True):
-        
+
         if undo:
             self.create_undo_snapshot('ALIGN')
         #if not event.ctrl and not event.shift:
         act = 'BETWEEN'
         #act = 'FORWARD'
         #act = 'BACKWARD'
-            
+
         self.sel_path.align_cut(self.sel_loop, mode = act, fine_grain = True)
         self.sel_loop.simplify_cross(self.sel_path.ring_segments)
-        
+
         self.sel_path.connect_cuts_to_make_mesh(self.original_form)
         self.sel_path.update_backbone(context, self.original_form, self.bme, self.sel_loop, insert = False)
         self.sel_path.update_visibility(context, self.original_form)
@@ -931,7 +904,7 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         '''
         if undo:
             self.create_undo_snapshot('DELETE')
-        
+
         #Identify the paths
         update_paths = set()
         remove_paths = set()
@@ -942,22 +915,21 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
                         path.remove_cut(context, self.original_form, self.bme, loop)
                         if path not in update_paths:
                             update_paths.add(path)
-                            
-                        
-                        
-                    else:
-                        if path not in remove_paths:
-                            remove_paths.add(path)
+
+
+
+                    elif path not in remove_paths:
+                        remove_paths.add(path)
         for u_path in update_paths - remove_paths:
             u_path.connect_cuts_to_make_mesh(self.original_form)
             u_path.update_visibility(context, self.original_form)
             u_path.backbone_from_cuts(context, self.original_form, self.bme)                
-        
-        
+
+
         for r_path in remove_paths:
-            
+
             self.cut_paths.remove(r_path)
-            
+
         self.sel_path = None
         self.sel_loop = None
     
@@ -970,7 +942,7 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         '''
         if undo:
             self.create_undo_snapshot('ROTATE')
-        
+
         #TODO...if CoM is off screen, then what?
         x,y = eventd['mouse']
         screen_pivot = location_3d_to_region_2d(context.region,context.space_data.region_3d,self.sel_loop.plane_com)
@@ -1016,16 +988,19 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         x,y = eventd['mouse']
         shft = eventd['shift']
         self.cut_line_widget.user_interaction(context, x, y, shift = shft)
-        
+
         self.sel_loop.cut_object(context, self.original_form, self.bme)
         self.sel_loop.simplify_cross(self.sel_path.ring_segments)
         self.sel_loop.update_com()
         self.sel_path.align_cut(self.sel_loop, mode = 'BETWEEN', fine_grain = True)
-        
+
         self.sel_path.connect_cuts_to_make_mesh(self.original_form)
         self.sel_path.update_visibility(context, self.original_form)
-        
-        self.temporary_message_start(context, 'WIDGET_TRANSFORM: ' + str(self.cut_line_widget.transform_mode))    
+
+        self.temporary_message_start(
+            context,
+            f'WIDGET_TRANSFORM: {str(self.cut_line_widget.transform_mode)}',
+        )    
 
     ########################
     #### modal functions####
@@ -1034,32 +1009,29 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         events_nav = self.keymap['navigate']
         handle_nav = False
         handle_nav |= eventd['ftype'] in events_nav
-        
+
         if handle_nav: return 'nav'
-            
+
         return ''
          
     def modal_loop(self, eventd): 
         self.footer = 'Loop Mode'
-        
-        #############################################
-        # general navigation
-        nmode = self.modal_nav(eventd)
-        if nmode:
+
+        if nmode := self.modal_nav(eventd):
             return nmode  #stop here and tell parent modal to 'PASS_THROUGH'
-        
+
         ########################################
         # accept / cancel hard coded
-        
+
         if eventd['press'] in self.keymap['confirm']:
             self.finish_mesh(eventd['context'])
             eventd['context'].area.header_text_set()
             return 'finish'
-        
+
         if eventd['press'] in self.keymap['cancel']:
             eventd['context'].area.header_text_set()
             return 'cancel'
-        
+
         #####################################
         # general, non modal commands
         if eventd['press'] in self.keymap['undo']:
@@ -1067,154 +1039,158 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
             self.undo_action()
             self.temporary_message_start(eventd['context'], "UNDO: %i steps in undo_cache" % len(contour_undo_cache))
             return ''
-        
+
         if eventd['press'] in self.keymap['mode']:
             self.footer = 'Guide Mode'
             self.mode_set_guide(eventd['context'])
             return 'main guide'
-     
+
         if eventd['type'] == 'MOUSEMOVE':  #mouse movement/hovering widget
             x,y = eventd['mouse']
             self.hover_loop_mode(eventd['context'], self.settings, x,y)
             return ''
-        
+
         if eventd['press'] in self.keymap['select']: # selection
-            ret = self.loop_select(eventd['context'], eventd)
-            if ret:
+            if ret := self.loop_select(eventd['context'], eventd):
                 return ''
-        
-   
+
+
         if eventd['press'] in self.keymap['action']:   # cutting and widget hard coded to LMB
-            
+
             if self.cut_line_widget:
                 self.prepare_widget(eventd)
-                
+
                 return 'widget'
-            
+
             else:
                 self.footer = 'Cutting'
                 x,y = eventd['mouse']
                 self.sel_loop = self.click_new_cut(eventd['context'], self.settings, x,y)    
                 return 'cutting'
-        
+
         if eventd['press'] in self.keymap['new']:
             self.force_new = self.force_new != True
             return ''
         ###################################
         # selected contour loop commands
-        
+
         if self.sel_loop:
             if eventd['press'] in self.keymap['delete']:
-                
+
                 self.loops_delete(eventd['context'], [self.sel_loop])
                 self.temporary_message_start(eventd['context'], 'DELETE')
                 return ''
-            
+
 
             if eventd['press'] in self.keymap['rotate']:
                 self.prepare_rotate(eventd['context'],eventd)
                 #header text handled during rotation
                 return 'widget'
-            
+
             if eventd['press'] in self.keymap['translate']:
                 self.prepare_translate(eventd['context'], eventd)
                 #header text handled during translation
                 return 'widget'
-            
+
             if eventd['press'] in self.keymap['align']:
                 self.loop_align(eventd['context'], eventd)
                 self.temporary_message_start(eventd['context'], 'ALIGN LOOP')
                 return ''
-            
+
             if eventd['press'] in self.keymap['up shift']:
                 self.loop_shift(eventd['context'], eventd, up = True)
-                self.temporary_message_start(eventd['context'], 'SHIFT: ' + str(self.sel_loop.shift))
+                self.temporary_message_start(
+                    eventd['context'], f'SHIFT: {str(self.sel_loop.shift)}'
+                )
+
                 return ''
-            
+
             if eventd['press'] in self.keymap['dn shift']:
                 self.loop_shift(eventd['context'], eventd, up = False)
-                self.temporary_message_start(eventd['context'], 'SHIFT: ' + str(self.sel_loop.shift))
+                self.temporary_message_start(
+                    eventd['context'], f'SHIFT: {str(self.sel_loop.shift)}'
+                )
+
                 return ''
-            
+
             if eventd['press'] in self.keymap['up count']:
                 n = len(self.sel_loop.verts_simple)
                 self.loop_nverts_change(eventd['context'], eventd, n+1)
                 #message handled within op
                 return ''
-            
+
             if eventd['press'] in self.keymap['dn count']:
                 n = len(self.sel_loop.verts_simple)
                 self.loop_nverts_change(eventd['context'], eventd, n-1)
                 #message handled within op
                 return ''
-            
+
             if eventd['press'] in self.keymap['snap cursor']:
                 eventd['context'].scene.cursor_location = self.sel_loop.plane_com
                 self.temporary_message_start(eventd['context'], "Cursor to loop")
                 return ''
-            
+
             if eventd['press'] in self.keymap['view cursor']:
                 bpy.ops.view3d.view_center_cursor()
                 self.temporary_message_start(eventd['context'], "View to cursor")
                 return ''
-                
+
         return ''
        
     def modal_guide(self, eventd):
         self.footer = 'Guide Mode'
-        #############################################
-        # general navigation
-         
-        nmode = self.modal_nav(eventd)
-        if nmode:
+        if nmode := self.modal_nav(eventd):
             self.mode_last = 'main guide'
             return nmode
-         
+
         ########################################
         # accept / cancel
-         
+
         if eventd['press'] in self.keymap['confirm']:
             self.finish_mesh(eventd['context'])
             eventd['context'].area.header_text_set()
             return 'finish'
-         
+
         if eventd['press'] in self.keymap['cancel']:
             eventd['context'].area.header_text_set()
             return 'cancel'
-         
-         
+
+
         if eventd['press'] in self.keymap['mode']:
             self.mode_set_loop()
             return 'main loop'
-         
+
         if eventd['press'] in self.keymap['new']:
             self.force_new = self.force_new != True
             return '' 
-        
+
         if eventd['press'] in self.keymap['undo']:
             self.undo_action()
             self.temporary_message_start(eventd['context'], "UNDO: %i steps remain in undo_cache" % len(contour_undo_cache))
             return ''
-        
+
         #####################################
         # general, non modal commands
-         
+
         if eventd['type'] == 'MOUSEMOVE':  #mouse movement/hovering widget
             x,y = eventd['mouse']
             self.hover_guide_mode(eventd['context'], self.settings, x, y)
             return ''
-        
-        if eventd['press'] in self.keymap['select']: # selection
-            if self.hover_target and self.hover_target.desc == 'CUT SERIES':
-                self.hover_target.do_select(self.settings)
-                self.sel_path = self.hover_target
-                
-                for path in self.cut_paths:
-                    if path != self.hover_target:
-                        path.deselect(self.settings) 
-                
-                return ''
-         
+
+        if (
+            eventd['press'] in self.keymap['select']
+            and self.hover_target
+            and self.hover_target.desc == 'CUT SERIES'
+        ):
+            self.hover_target.do_select(self.settings)
+            self.sel_path = self.hover_target
+
+            for path in self.cut_paths:
+                if path != self.hover_target:
+                    path.deselect(self.settings) 
+
+            return ''
+
         if eventd['press'] in self.keymap['action']: #LMB hard code for sketching
             self.footer = 'sketching'
             x,y = eventd['mouse']
@@ -1222,26 +1198,34 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
             return 'sketch'
         ###################################
         # selected contour segment commands
-         
+
         if self.sel_path:
             if eventd['press'] in self.keymap['delete']:
                 self.create_undo_snapshot('DELETE')
                 self.cut_paths.remove(self.sel_path)
                 self.sel_path = None
                 self.temporary_message_start(eventd['context'], 'DELETED PATH')
-                        
+
                 return ''
-            
+
             if eventd['press'] in self.keymap['up shift']:
                 self.segment_shift(eventd['context'], up = True)
-                self.temporary_message_start(eventd['context'], 'SHIFT: ' + str(round(self.sel_path.cuts[0].shift,3)))
+                self.temporary_message_start(
+                    eventd['context'],
+                    f'SHIFT: {str(round(self.sel_path.cuts[0].shift,3))}',
+                )
+
                 return ''
-            
+
             if eventd['press'] in self.keymap['dn shift']:
                 self.segment_shift(eventd['context'], up = False)
-                self.temporary_message_start(eventd['context'], 'SHIFT: ' + str(round(self.sel_path.cuts[0].shift,3)))
+                self.temporary_message_start(
+                    eventd['context'],
+                    f'SHIFT: {str(round(self.sel_path.cuts[0].shift,3))}',
+                )
+
                 return 
-            
+
             if eventd['press'] in self.keymap['up count']:
                 n = self.sel_path.segments + 1
                 if self.sel_path.seg_lock:
@@ -1250,7 +1234,7 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
                     self.segment_n_loops(eventd['context'], self.sel_path, n)    
                     self.temporary_message_start(eventd['context'], 'PATH SEGMENTS: %i' % n)
                 return ''
-            
+
             if eventd['press'] in self.keymap['dn count']:
                 n = self.sel_path.segments - 1
                 if self.sel_path.seg_lock:
@@ -1261,23 +1245,23 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
                     self.segment_n_loops(eventd['context'], self.sel_path, n)    
                     self.temporary_message_start(eventd['context'], 'PATH SEGMENTS: %i' % n)
                 return ''
-            
+
             if eventd['press'] in self.keymap['smooth']:
-                
+
                 self.segment_smooth(eventd['context'], self.settings)
                 #messaging handled in operator
                 return ''
-            
+
             if eventd['press'] in self.keymap['snap cursor']:
                 self.cursor_to_segment(eventd['context'])
                 self.temporary_message_start(eventd['context'], 'Cursor to Segment')
                 return ''
-             
-             
+
+
             if eventd['press'] in self.keymap['view cursor']:
                 bpy.ops.view3d.view_center_cursor()
                 return ''
-                 
+
         return ''
     
     def modal_cut(self, eventd):
@@ -1299,20 +1283,20 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
         if eventd['type'] == 'MOUSEMOVE':
             x,y = eventd['mouse']
             self.sketch_curpos = (x,y)
-            
+
             (lx, ly) = self.sketch[-1]
             #on the fly, backwards facing, smoothing
             ss0,ss1 = self.stroke_smoothing,1-self.stroke_smoothing
             self.sketch += [(lx*ss0+x*ss1, ly*ss0+y*ss1)] #vs append?
-                        
+
             return ''
-        
+
         elif eventd['release'] in self.keymap['action']:
             print('released....trying to make a new path')
             self.sketch_confirm(eventd['context'])
-                
+
             return 'main guide'
-        
+
         return ''
     
     def modal_widget_tool(self,eventd):
@@ -1341,39 +1325,37 @@ class CGCOOKIE_OT_contours_rf(bpy.types.Operator):
     def modal(self, context, event):
         context.area.tag_redraw()
         settings = context.user_preferences.addons[AL.FolderName].preferences
-        
+
         eventd = self.get_event_details(context, event)
-        #if eventd['type'] != 'TIMER':
-            #print((eventd['type'], eventd['value']))
-            
         if event.type == 'TIMER':
             self.check_message(context)
             return {'RUNNING_MODAL'}
-        
-        FSM = {}
-        FSM['main loop']    = self.modal_loop
-        FSM['main guide']   = self.modal_guide
-        FSM['nav']          = self.modal_nav
-        FSM['cutting']      = self.modal_cut
-        FSM['sketch']       = self.modal_sketching
-        FSM['widget']       = self.modal_widget_tool
-        
+
+        FSM = {
+            'main loop': self.modal_loop,
+            'main guide': self.modal_guide,
+            'nav': self.modal_nav,
+            'cutting': self.modal_cut,
+            'sketch': self.modal_sketching,
+            'widget': self.modal_widget_tool,
+        }
+
         self.cur_pos = eventd['mouse']
         nmode = FSM[self.mode](eventd)
         self.mode_pos = eventd['mouse']
-        
-        
-        
+
+
+
         #self.is_navigating = (nmode == 'nav')
         if nmode == 'nav': return {'PASS_THROUGH'}
-        
+
         if nmode in {'finish','cancel'}:
             contour_utilities.callback_cleanup(self, context)
             self.kill_timer(context)
             return {'FINISHED'} if nmode == 'finish' else {'CANCELLED'}
-        
+
         if nmode: self.mode = nmode
-        
+
         return {'RUNNING_MODAL'}
  
                     

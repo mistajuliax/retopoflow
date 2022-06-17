@@ -56,33 +56,33 @@ class GVert:
         self.o_name       = obj.name
         self.targ_o_name  = targ_obj.name
         self.length_scale = length_scale
-        
+
         self.position  = position
         self.radius    = radius
         self.normal    = normal
         self.tangent_x = tangent_x
         self.tangent_y = tangent_y
-        
+
         self.snap_pos  = position
         self.snap_norm = normal
         self.snap_tanx = tangent_x
         self.snap_tany = tangent_y
-        
+
         self.gedge0 = None
         self.gedge1 = None
         self.gedge2 = None
         self.gedge3 = None
         self.gedge_inner = None
-        
+
         self.zip_over_gedge = None      # which gedge to zip over (which gets updated...)
         self.zip_t          = 0         # where do we attach?
         self.zip_igv        = 0
         self.zip_snap_end   = False     # do we snap to endpoint of zip_over_gedge?
-        
+
         self.doing_update = False
-        
+
         self.visible = True
-        
+
         #data used when extending or emulating data
         #already within a BMesh
         self.from_mesh = from_mesh
@@ -91,9 +91,9 @@ class GVert:
         self.corner1_ind = -1
         self.corner2_ind = -1
         self.corner3_ind = -1
-        
-        self.frozen = True if self.from_mesh else False
-        
+
+        self.frozen = bool(self.from_mesh)
+
         self.update()
     
     def clone_detached(self):
@@ -107,18 +107,25 @@ class GVert:
         gv.snap_tany = Vector(self.snap_tany)
         return gv
     
-    def has_0(self): return not (self.gedge0 is None)
-    def has_1(self): return not (self.gedge1 is None)
-    def has_2(self): return not (self.gedge2 is None)
-    def has_3(self): return not (self.gedge3 is None)
-    def is_inner(self): return not (self.gedge_inner is None)
+    def has_0(self):
+        return self.gedge0 is not None
+    def has_1(self):
+        return self.gedge1 is not None
+    def has_2(self):
+        return self.gedge2 is not None
+    def has_3(self):
+        return self.gedge3 is not None
+    def is_inner(self):
+        return self.gedge_inner is not None
     
     def count_gedges(self):   return len(self.get_gedges_notnone())
     
     def is_unconnected(self): return not (self.has_0() or self.has_1() or self.has_2() or self.has_3())
     def is_endpoint(self):    return self.has_0() and not (self.has_1() or self.has_2() or self.has_3())
-    def is_endtoend(self):    return self.has_0() and self.has_2() and not (self.has_1() or self.has_3())
-    def is_ljunction(self):   return self.has_0() and self.has_1() and not (self.has_2() or self.has_3())
+    def is_endtoend(self):
+        return self.has_0() and self.has_2() and not self.has_1() and not self.has_3()
+    def is_ljunction(self):
+        return self.has_0() and self.has_1() and not self.has_2() and not self.has_3()
     def is_tjunction(self):   return self.has_0() and self.has_1() and self.has_3() and not self.has_2()
     def is_cross(self):       return self.has_0() and self.has_1() and self.has_2() and self.has_3()
     
@@ -163,11 +170,11 @@ class GVert:
     
     def update_gedges(self):
         if self.is_unconnected(): return
-        
+
         pr = profiler.start()
-        
+
         norm = self.snap_norm
-        
+
         l_gedges = self.get_gedges_notnone()
         l_vecs   = [ge.get_derivative_at(self).normalized() for ge in l_gedges]
         if any(v.length == 0 for v in l_vecs): print (l_vecs)
@@ -177,9 +184,9 @@ class GVert:
         if any(v.length == 0 for v in l_vecs): print(l_vecs)
         #l_vecs = [v if v.length else Vector((1,0,0)) for v in l_vecs]
         l_angles = [vector_angle_between(v0,v1,norm) for v0,v1 in zip(l_vecs,l_vecs[1:]+[l_vecs[0]])]
-        
+
         connect_count = len(l_gedges)
-        
+
         if connect_count == 1:
             self._set_gedges(l_gedges[0],None,None,None)
             assert self.is_endpoint()
@@ -208,9 +215,9 @@ class GVert:
             assert self.is_cross()
         else:
             assert False
-        
+
         self.update()
-        
+
         pr.done()
     
     
@@ -333,7 +340,7 @@ class GVert:
                     return self.snap_pos + self.snap_tanx*self.radius*dmx + self.snap_tany*self.radius*dmy
                 if igv0 and not igv1:
                     return igv0.position + igv0.tangent_y*r0
-                if igv1 and not igv0:
+                if not igv0:
                     return igv1.position - igv1.tangent_y*r1
                 return (igv0.position+igv0.tangent_y*r0 + igv1.position-igv1.tangent_y*r1)/2
             
@@ -386,7 +393,7 @@ class GVert:
             self.visible = False not in common_utilities.ray_cast_visible(self.get_corners(), bpy.data.objects[self.o_name], r3d)
         else:
             self.visible = common_utilities.ray_cast_visible([self.snap_pos], bpy.data.objects[self.o_name], r3d)[0]
-        
+
         if not update_gedges: return
         for ge in self.get_gedges_notnone():
             ge.update_visibility(r3d)
@@ -562,27 +569,27 @@ class GEdge:
         self.gvert1 = gvert1
         self.gvert2 = gvert2
         self.gvert3 = gvert3
-        
+
         self.force_count = False
         self.n_quads = None
         self.changing_count = False
-        
+
         self.zip_to_gedge   = None
         self.zip_side       = 1
         self.zip_dir        = 1
-        
+
         self.zip_attached   = []
-        
+
         self.frozen = False
 
         self.l_ts = []
         self.gpatches = []
-        
+
         # create caching vars
         self.cache_igverts = []             # cached interval gverts
                                             # even-indexed igverts are poly "centers"
                                             #  odd-indexed igverts are poly "edges"
-        
+
         gvert0.connect_gedge(self)
         gvert1.connect_gedge_inner(self)
         gvert2.connect_gedge_inner(self)
@@ -590,21 +597,17 @@ class GEdge:
 
     def get_count(self):
         l = len(self.cache_igverts)
-        if l > 4:
-            n_quads = math.floor(l/2) + 1
-        else:
-            n_quads = 3
-        return n_quads
+        return math.floor(l/2) + 1 if l > 4 else 3
     
     def set_count(self, c):
         c = min(c,50)
         if self.force_count and self.n_quads == c:
             return
-        
+
         if self.changing_count:
             # already changing!  must be a bad loop
             return
-        
+
         self.changing_count = True
         self.force_count = True
         self.n_quads = c
@@ -612,7 +615,7 @@ class GEdge:
             for gpatch in self.gpatches:
                 gpatch.set_count(self)
         self.changing_count = False
-        
+
         self.update()
         
         
@@ -624,7 +627,8 @@ class GEdge:
         self.n_quads = None
         self.update()
     
-    def has_endpoint(self, gv): return gv==self.gvert0 or gv==self.gvert3
+    def has_endpoint(self, gv):
+        return gv in [self.gvert0, self.gvert3]
     def get_other_end(self, gv): return self.gvert0 if gv==self.gvert3 else self.gvert3
     
     def is_zippered(self): return (self.zip_to_gedge != None)
@@ -763,13 +767,9 @@ class GEdge:
     
     def get_igvert_at(self, gv):
         if self.gvert0 == gv:
-            if len(self.cache_igverts):
-                return self.cache_igverts[1]
-            return None #self.gvert0
+            return self.cache_igverts[1] if len(self.cache_igverts) else None
         if self.gvert3 == gv:
-            if len(self.cache_igverts):
-                return self.cache_igverts[-2]
-            return None #self.gvert3
+            return self.cache_igverts[-2] if len(self.cache_igverts) else None
         assert False, "gv is not an endpoint"
     
     def get_positions(self):
@@ -889,7 +889,7 @@ class GEdge:
                     if side>0:  p0,p1 = p0,p0+(p0-p1).normalized()*(radius*2)
                     else:       p0,p1 = p1,p1+(p1-p0).normalized()*(radius*2)
                     return (p1,p0)
-                
+
                 igv = zip_igverts[ind]
                 p0 = igv.position + igv.tangent_y*side*(igv.radius+radius*2)
                 p1 = igv.position + igv.tangent_y*side*(igv.radius)
@@ -929,57 +929,36 @@ class GEdge:
         p0,p1,p2,p3 = self.get_positions()
         r0,r1,r2,r3 = self.get_radii()
         n0,n1,n2,n3 = self.get_normals()
-        
-        if False:
-            # attempting to smooth snapped igverts
-            mx     = self.obj.matrix_world
-            mxnorm = mx.transposed().inverted().to_3x3()
-            mx3x3  = mx.to_3x3()
-            imx    = mx.inverted()
-            p3d      = [cubic_bezier_blend_t(p0,p1,p2,p3,t/16.0) for t in range(17)]
-            snap     = [self.obj.closest_point_on_mesh(imx*p) for p in p3d]
-            snap_pos = [mx*pos for pos,norm,idx in snap]
-            bez = cubic_bezier_fit_points(snap_pos, min(r0,r3)/20, allow_split=False)
-            if bez:
-                _,_,p0,p1,p2,p3 = bez[0]
-                _,n1,_ = self.obj.closest_point_on_mesh(imx*p1)
-                _,n2,_ = self.obj.closest_point_on_mesh(imx*p2)
-                n1 = mxnorm*n1
-                n2 = mxnorm*n2
-        
+
         #get s_t_map
-        if self.n_quads:
-            step = 20* self.n_quads
-        else:
-            step = 100
-            
+        step = 20* self.n_quads if self.n_quads else 100
         s_t_map = polystrips_utilities.cubic_bezier_t_of_s_dynamic(p0, p1, p2, p3, initial_step = step )
-        
+
         #l = self.get_length()  <-this is more accurate, but we need consistency
         l = max(s_t_map)
-        
+
         if self.force_count and self.n_quads:
             # force number of segments
-            
+
             # number of segments
             c = 2 * (self.n_quads - 1)
-            
+
             # compute difference for smoothly interpolating radii perpendicular to GEdge
             s = (r3-r0) / float(c+1)
-            
+
             L = c * r0 +  s*(c+1)*c/2  #integer run sum
             os = L - l
             d_os = os/c
-            
+
             # compute interval lengths and ts
             l_widths = [0] + [r0 + s*i - d_os for i in range(c)]
             l_ts = [polystrips_utilities.closest_t_of_s(s_t_map, dist) for w,dist in iter_running_sum(l_widths)]  #pure lenght distribution
-        
+
         else:
             # find "optimal" count for subdividing spline based on radii of two endpoints
-            
+
             cmin,cmax = int(math.floor(l/max(r0,r3))),int(math.floor(l/min(r0,r3)))
-            
+
             c = 0
             for ctest in range(max(4,cmin-2),cmax+2):
                 s = (r3-r0) / (ctest-1)
@@ -989,38 +968,38 @@ class GEdge:
                 if ctest % 2 == 1:
                     c = ctest
             c = max(3,c)
-            
+
             # compute difference for smoothly interpolating radii
             s = (r3-r0) / float(c-1)
-            
+
             # compute how much space is left over (to be added to each interval)
             tot = r0*(c+1) + s*(c+1)*c/2
             o = l - tot
             oc = o / (c+1)
-            
+
             # compute interval lengths, ts, blend weights
             l_widths = [0] + [r0+oc+i*s for i in range(c+1)]
             l_ts = [p/l for w,p in iter_running_sum(l_widths)]
-        
+
         # compute interval pos, rad, norm, tangent x, tangent y
         l_pos   = [cubic_bezier_blend_t(p0,p1,p2,p3,t) for t in l_ts]
         l_radii = [r0 + i*s for i in range(c+2)]
-        
+
         #Verify smooth radius interpolation
         #print('R0 %f, R3 %f, r0 %f, r3 %f ' % (r0,r3,l_radii[0],l_radii[-1]))
         l_norms = [cubic_bezier_blend_t(n0,n1,n2,n3,t).normalized() for t in l_ts]
         l_tanx  = [cubic_bezier_derivative(p0,p1,p2,p3,t).normalized() for t in l_ts]
         l_tany  = [t.cross(n).normalized() for t,n in zip(l_tanx,l_norms)]
-        
+
         # create igverts!
         self.cache_igverts = [GVert(bpy.data.objects[self.o_name], bpy.data.objects[self.targ_o_name], self.length_scale,p,r,n,tx,ty) for p,r,n,tx,ty in zip(l_pos,l_radii,l_norms,l_tanx,l_tany)]
         if not self.force_count:
             self.n_quads = int((len(self.cache_igverts)+1)/2)
-            
+
         self.l_ts = l_ts
 
         self.snap_igverts()
-        
+
         self.gvert0.update(do_edges=False)
         self.gvert1.update(do_edges=False)
         self.gvert2.update(do_edges=False)
@@ -1114,11 +1093,11 @@ class GEdge:
             if not only_visible or (self.gvert0.is_visible() and self.gvert3.is_visible()):
                 yield (cur0,cur1,cur2,cur3)
             return
-        
+
         prev0,prev1 = None,None
         for i,gvert in enumerate(self.cache_igverts):
             if i%2 == 0: continue
-            
+
             if i == 1:
                 gv0 = self.gvert0
                 cur0,cur1 = gv0.get_corners_of(self)
@@ -1128,25 +1107,20 @@ class GEdge:
             else:
                 cur0 = gvert.position+gvert.tangent_y*gvert.radius
                 cur1 = gvert.position-gvert.tangent_y*gvert.radius
-            
-            if prev0 and prev1:
-                if not only_visible or gvert.is_visible():
-                    yield (prev0,cur0,cur1,prev1)
+
+            if prev0 and prev1 and (not only_visible or gvert.is_visible()):
+                yield (prev0,cur0,cur1,prev1)
             prev0,prev1 = cur0,cur1
     
     def iter_igverts(self):
         l = len(self.cache_igverts)
         if l == 0: return
-        
+
         prev0,prev1 = None,None
         for i,gvert in enumerate(self.cache_igverts):
             if i%2 == 0: continue
-            
-            if i == 1:
-                continue
-            elif i == l-2:
-                continue
-            else:
+
+            if i not in [1, l - 2]:
                 yield (i,gvert)
 
 
@@ -1159,28 +1133,28 @@ class GEdge:
 class GPatch:
     def __init__(self, obj, *gedges):
         # TODO: allow multiple gedges per side!!
-        
+
         self.o_name = obj.name
         self.frozen = False
-        
+
         self.gedges = gedges
         self.nsides = len(gedges)
-        
+
         self.count_error = False
-        
+
         # attach gedge to gpatch
         for ge in self.gedges: ge.attach_gpatch(self)
-        
+
         # should the gedges be reversed?
         self.rev = [ge0.gvert3 not in [ge1.gvert0, ge1.gvert3] for ge0,ge1 in zip_pairs(self.gedges)]
-        
+
         # make sure gedges have proper counts
         if self.nsides == 3:
             count = min(ge.get_count() for ge in self.gedges)
             if count%2==1: count += 1
             count = max(count,4)
             for ge in self.gedges: ge.set_count(count)
-        
+
         elif self.nsides == 4:
             count02 = min(self.gedges[0].get_count(), self.gedges[2].get_count())
             count13 = min(self.gedges[1].get_count(), self.gedges[3].get_count())
@@ -1188,7 +1162,7 @@ class GPatch:
             self.gedges[2].set_count(count02)
             self.gedges[1].set_count(count13)
             self.gedges[3].set_count(count13)
-        
+
         elif self.nsides == 5:
             count0 = self.gedges[0].get_count()-2
             if count0%2==1: count0 += 1
@@ -1199,23 +1173,25 @@ class GPatch:
             self.gedges[3].set_count(count0//2+2)
             self.gedges[1].set_count(count14)
             self.gedges[4].set_count(count14)
-        
+
         self.quads = []     # list of tuples of inds into self.pts
         self.pts   = []     # list of tuples of (position,visible,lookup), where lookup is either (GEdge,ind_igvert) or None
-        
+
         self.update()
     
     def rotate_pole(self, reverse=False):
         if self.frozen: return
-        
+
         if self.nsides != 5: return
-        
-        if not reverse:
-            self.gedges = self.gedges[1:] + self.gedges[:1]
-        else:
-            self.gedges = self.gedges[-1:] + self.gedges[:-1]
+
+        self.gedges = (
+            self.gedges[-1:] + self.gedges[:-1]
+            if reverse
+            else self.gedges[1:] + self.gedges[:1]
+        )
+
         self.rev = [ge0.gvert3 not in [ge1.gvert0, ge1.gvert3] for ge0,ge1 in zip_pairs(self.gedges)]
-        
+
         count0 = self.gedges[0].get_count()-2
         if count0%2==1: count0 += 1
         count0 = max(count0,2)
@@ -1225,7 +1201,7 @@ class GPatch:
         self.gedges[3].set_count(count0//2+2)
         self.gedges[1].set_count(count14)
         self.gedges[4].set_count(count14)
-        
+
         self.update()
     
     def freeze(self):
